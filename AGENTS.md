@@ -22,6 +22,24 @@ The skill at `.agents/skills/mygo-maintenance/SKILL.md` is MyGo's own, put
 there by `go tool mygo install-skills .`. Update it with that command rather
 than by hand, so it stays in step with the pinned version.
 
+## Memory
+
+If the NWron MCP is available, search project `vdlp` before starting.
+
+Only memorize committed work:
+
+1. Run `git status --short`. If anything is uncommitted, do not write a memory.
+   Ask the user to commit first, or wait for the commit.
+2. Record the commit hash and describe the state at that commit. Never claim work
+   that only exists in the working tree.
+3. When a change alters a decision already in memory, update or supersede that
+   memory after the new commit instead of adding a second copy. Leave stale
+   memories alone until the replacement is committed.
+4. Never commit, tag or publish just to make a memory writable.
+
+If the user asks to memorize while the tree is dirty, say so and stop at the
+commit step unless they explicitly asked you to commit.
+
 ## Hard rules
 
 - **No cgo.** Everything builds with `CGO_ENABLED=0`.
