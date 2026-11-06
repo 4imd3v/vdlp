@@ -9,6 +9,67 @@ It drives **yt-dlp, youtube-dl, gallery-dl, lux, you-get, svtplay-dl, aria2c,
 wget** and **Safari Books**. Each is a program you install yourself; the app only
 tells it what to fetch.
 
+## Install
+
+Take the release from the
+[releases page](https://github.com/4imd3v/vdlp/releases/latest). VDLP is one
+binary; each of these puts it where the desktop can start it. The script and
+the Windows installer install for your user alone, and keep the app up to date
+by itself. Neither installs a downloader: see "what it needs" below.
+
+### Linux
+
+Installs in `~/.local/vdlp.app`, with an entry in the applications menu, and
+updates itself from then on:
+
+```sh
+curl -fsSL https://github.com/4imd3v/vdlp/releases/latest/download/install.sh | sh
+```
+
+Or the Debian package, which `apt` updates instead: it installs in `/opt`,
+where the app may not write, so its own check says updates are unavailable
+(the release page has it as `vdlp_<version>_amd64.deb`, or `_arm64`):
+
+```sh
+sudo apt install ./vdlp_0.2.1_amd64.deb
+```
+
+`vdlp-<version>-linux-amd64.tar.gz` and `-arm64.tar.gz` hold the binary on its
+own, for anywhere else.
+
+### macOS
+
+The disk image, to drag VDLP into Applications, or the script, which installs
+into `/Applications` when it may and `~/Applications` when it may not, and
+updates itself:
+
+```sh
+curl -fsSL https://github.com/4imd3v/vdlp/releases/latest/download/install.sh | sh
+```
+
+The app is signed ad hoc, not with a Developer ID: the first time, right-click
+it in Finder and choose Open.
+
+### Windows
+
+Installs for the current user under `%LOCALAPPDATA%\Programs\VDLP`, and
+updates itself from then on:
+
+```powershell
+irm https://github.com/4imd3v/vdlp/releases/latest/download/install.ps1 | iex
+```
+
+Or run `vdlp-setup-<version>-amd64.exe` from the release (`-arm64` for ARM).
+It is not code-signed, so SmartScreen warns the first time.
+
+### What it needs
+
+One of the downloaders, in `PATH` or at a path set in **Settings**: `yt-dlp`
+for YouTube and the thousand sites it covers, and the others as their READMEs
+say. `ffmpeg` is needed for the merges an engine asks of it, and for embedding
+subtitles in a download. The Settings page lists each engine and says whether
+it found one.
+
 ## What it does
 
 - **New download** — a link, an engine, a preset, and extra options. "Get
@@ -17,6 +78,10 @@ tells it what to fetch.
 - **Batch download** — many links at once, typed one by one, pasted, or read
   from a file with one link per line.
 - **Playlist** — list what a playlist holds and download the entries you choose.
+- **Subtitles** — the subtitles of a video or of every video in a playlist,
+  fetched as they are and rewritten into blocks of the two lines a player
+  draws, so they stay where they are put. A video download can have them
+  embedded as it is saved, in the languages you name.
 - **Library** — the downloads of this session, with progress, speed and ETA;
   pause, resume, start over, open the file, show it in its folder, read what the
   downloader said, and copy the link.
