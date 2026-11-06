@@ -179,6 +179,35 @@ func TestSubtitleLanguage(t *testing.T) {
 	}
 }
 
+// TestFormatRowsKeepOneHeight checks that a format row is one line tall
+// whatever its id: the id was drawn twice, as the box's label and as a text
+// beside it, and a long one wrapped out of its column and doubled the row.
+func TestFormatRowsKeepOneHeight(t *testing.T) {
+	a, tt := testApp(t)
+	a.page = "download"
+	a.url = "https://www.youtube.com/watch?v=x"
+	a.infoFor = a.url
+	a.info = &mediaInfo{
+		title: "A video",
+		formats: []mediaFormat{
+			{id: "139-drc", ext: "m4a", audio: true},
+			{id: "137", ext: "mp4", width: 1920, height: 1080, video: true},
+		},
+	}
+	tt.Frame()
+	long, ok := tt.Find("139-drc")
+	if !ok {
+		t.Fatal("the row of the long id is not shown")
+	}
+	short, ok := tt.Find("137")
+	if !ok {
+		t.Fatal("the row of the short id is not shown")
+	}
+	if long.H != short.H {
+		t.Errorf("a long id makes its row %v tall, a short one %v", long.H, short.H)
+	}
+}
+
 // TestEngineFromLink checks the guess the app makes from a link's host.
 func TestEngineFromLink(t *testing.T) {
 	for url, want := range map[string]string{

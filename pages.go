@@ -255,10 +255,9 @@ func (a *app) formatsCard(c *ui.Context) {
 			switch col {
 			case 0:
 				chosen := a.chosen[f.id]
-				ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
-					ui.Checkbox(c, &chosen, f.id)
-					ui.Text(c, f.id)
-				})
+				// The id is the box's own label: a text beside it would be
+				// the same words a second time, wrapped in the column.
+				ui.Checkbox(c, &chosen, f.id)
 				if chosen != a.chosen[f.id] {
 					a.chosen[f.id] = chosen
 				}
@@ -510,8 +509,9 @@ func (a *app) playlistPage(c *ui.Context) {
 				case 0:
 					chosen := a.chosen[e.id]
 					ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
-						ui.Checkbox(c, &chosen, e.title)
-						ui.Text(c, fmt.Sprint(row+1)).TextColor(c.Theme().TextMuted)
+						// Named by its title, though the cell shows the number.
+						ui.Checkbox(c, &chosen, "").Label(e.title).Shrink(0)
+						ui.Text(c, fmt.Sprint(row+1)).TextColor(c.Theme().TextMuted).SingleLine()
 					})
 					if chosen != a.chosen[e.id] {
 						a.chosen[e.id] = chosen
