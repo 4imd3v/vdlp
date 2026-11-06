@@ -101,6 +101,38 @@ func TestDownloadPageEmbedsSubtitles(t *testing.T) {
 	}
 }
 
+// TestSubtitlesPage checks that the Subtitles page queues a link's subtitles
+// alone, rewritten where they are written, whatever engine the other pages
+// use.
+func TestSubtitlesPage(t *testing.T) {
+	a, tt := testApp(t)
+	a.setEngine("gallery-dl")
+	a.page, a.subURL = "subtitles", "https://www.youtube.com/playlist?list=PLx"
+	tt.Frame()
+	if err := tt.Click("Download subtitles"); err != nil {
+		t.Fatal(err)
+	}
+	tasks := a.mgr.snapshot()
+	if len(tasks) != 1 {
+		t.Fatalf("%d tasks queued", len(tasks))
+	}
+	tk := tasks[0]
+	if tk.engineID != "yt-dlp" {
+		t.Errorf("subtitles are fetched by %q", tk.engineID)
+	}
+	if tk.job.embedSubs || !tk.job.cleanSubs {
+		t.Errorf("job embeds %v, rewrites %v", tk.job.embedSubs, tk.job.cleanSubs)
+	}
+	for _, want := range []string{"--skip-download", "--write-subs", "--sub-format"} {
+		if !contains(tk.job.args, want) {
+			t.Errorf("command %v is missing %q", tk.job.args, want)
+		}
+	}
+	if a.page != "library" {
+		t.Errorf("page after asking for subtitles is %q", a.page)
+	}
+}
+
 // TestEngineFromLink checks the guess the app makes from a link's host.
 func TestEngineFromLink(t *testing.T) {
 	for url, want := range map[string]string{
@@ -179,9 +211,14 @@ func TestCommand(t *testing.T) {
 			t.Errorf("audio command %v has %q", j.args, want)
 		}
 	}
-	// Nor does one that downloads no video.
-	if j := a.command("https://x", "yt-dlp", "Subtitles only", []string{"--skip-download", "--write-subs"}); j.embedSubs {
+	// Nor does one that downloads no video: it rewrites them where they
+	// are written instead of embedding them.
+	j = a.command("https://x", "yt-dlp", "Subtitles only", presetArgs("yt-dlp", "Subtitles only"))
+	if j.embedSubs {
 		t.Errorf("subtitles-only command %v embeds what it did not download", j.args)
+	}
+	if !j.cleanSubs {
+		t.Error("a subtitles-only download does not rewrite its subtitles")
 	}
 	// wget takes its own flags for the same settings.
 	if j := a.command("https://x", "wget", "Download", nil); contains(j.args, "-o") || j.resumeFlag != "-c" {

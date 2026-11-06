@@ -68,6 +68,9 @@ type job struct {
 	// embedSubs asks for the subtitles the engine writes to be rewritten
 	// and muxed into the video once it has downloaded it.
 	embedSubs bool
+	// cleanSubs asks for them to be rewritten where the engine wrote them,
+	// for a download that wants the subtitles and no video.
+	cleanSubs bool
 }
 
 // task is one download: a link, the engine that fetches it and how it goes.
@@ -87,9 +90,11 @@ type task struct {
 	speed   string
 	eta     string
 	size    string
-	// file is where the downloader said it wrote, once known.
-	file string
-	err  string
+	// file is where the downloader said it wrote, once known, and wrote is
+	// every file it named, which a playlist spreads over many.
+	file  string
+	wrote []string
+	err   string
 	// resume asks the next run to continue a partial file.
 	resume  bool
 	addedAt time.Time
@@ -474,6 +479,9 @@ func (m *manager) run(t *task, ctx context.Context, cancel context.CancelFunc) {
 			return
 		}
 	}
+	if j.cleanSubs {
+		m.cleanSubtitles(t)
+	}
 	m.finish(t, nil)
 }
 
@@ -526,6 +534,34 @@ func (m *manager) embedSubtitles(ctx context.Context, t *task) error {
 	return nil
 }
 
+// cleanSubtitles rewrites the subtitle files a download wrote, in the place
+// it wrote them, as a subtitles-only download has no video to mux them into.
+// A file that cannot be read is logged and left as it is.
+func (m *manager) cleanSubtitles(t *task) {
+	m.mu.Lock()
+	wrote := slices.Clone(t.wrote)
+	m.mu.Unlock()
+	for _, name := range wrote {
+		file := name
+		if !filepath.IsAbs(file) {
+			file = filepath.Join(t.job.dir, file)
+		}
+		if !strings.EqualFold(filepath.Ext(file), ".srt") {
+			continue
+		}
+		b, err := os.ReadFile(file)
+		if err != nil {
+			m.log().Warn("reading the subtitles", "file", file, "err", err)
+			continue
+		}
+		if err := os.WriteFile(file, []byte(cleanSRT(string(b))), 0o644); err != nil {
+			m.log().Warn("rewriting the subtitles", "file", file, "err", err)
+			continue
+		}
+		m.log().Info("subtitles rewritten", "file", file)
+	}
+}
+
 // failed logs why a download could not run, and reports it to the task. The
 // downloader's own last words say more than its exit status, so they are
 // logged with it.
@@ -570,10 +606,12 @@ func (m *manager) fold(t *task, line string) {
 	if g := reDest.FindStringSubmatch(line); g != nil {
 		if name := strings.Trim(strings.TrimSpace(g[1]), `"`); name != "" {
 			t.file, t.title = name, trimExt(name)
+			t.wrote = append(t.wrote, name)
 		}
 	}
 	if g := reSave.FindStringSubmatch(line); g != nil {
 		t.file, t.title = strings.TrimSpace(g[1]), trimExt(strings.TrimSpace(g[1]))
+		t.wrote = append(t.wrote, t.file)
 	}
 	if g := rePercent.FindStringSubmatch(line); g != nil {
 		if v, err := strconv.ParseFloat(g[1], 64); err == nil {

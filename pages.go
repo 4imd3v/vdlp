@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"runtime/debug"
+	"slices"
 	"strings"
 
 	"github.com/egoist/mygo"
@@ -89,6 +90,54 @@ func (a *app) downloadPage(c *ui.Context) {
 			a.formatsCard(c)
 		}
 	})
+}
+
+// subtitlesPage downloads the subtitles of a video, or of every video in a
+// playlist, and nothing else. They are rewritten into blocks of two lines
+// as they are written: see cleanSRT.
+func (a *app) subtitlesPage(c *ui.Context) {
+	scrollPage(c, func() {
+		card(c, "Link", func() {
+			ui.Row(c).Gap(8).Children(func() {
+				ui.TextInput(c, &a.subURL).Placeholder("https://www.youtube.com/watch?v=…").Grow(1)
+				ui.Button(c, "Paste").OnClick(func() { a.subURL = a.clipboard() })
+			})
+			muted(c, "A video, or a playlist and every video in it. yt-dlp fetches them.")
+		})
+
+		card(c, "Which languages", func() {
+			// A local copy of the setting, written back once the input has
+			// applied the change, as the download page's is.
+			langs := a.set.SubLangs
+			ui.TextInput(c, &langs).Placeholder("Languages, e.g. en,ja — empty for the engine's own choice").Grow(1).OnChange(func() {
+				a.set.SubLangs = langs
+				a.save()
+			})
+			muted(c, "Automatic captions are downloaded when a video has no subtitles of its own, and are rewritten into clean blocks of two lines.")
+			muted(c, "One .srt per video, in the downloads folder.")
+			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+				ui.Spacer(c)
+				ui.PrimaryButton(c, "Download subtitles").Disabled(a.subURL == "").OnClick(a.downloadSubtitles)
+			})
+		})
+	})
+}
+
+// downloadSubtitles queues a link's subtitles, from yt-dlp whatever engine
+// the other pages are set to.
+func (a *app) downloadSubtitles() {
+	url := strings.TrimSpace(a.subURL)
+	if url == "" {
+		return
+	}
+	a.mgr.add(&task{
+		url:      url,
+		engineID: "yt-dlp",
+		preset:   "Subtitles only",
+		job:      a.command(url, "yt-dlp", "Subtitles only", slices.Clone(subtitleArgs)),
+	})
+	a.subURL = ""
+	a.goTo("library")
 }
 
 // fetchError shows why asking an engine about a link failed.

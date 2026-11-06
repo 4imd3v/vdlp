@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os/exec"
 	"runtime"
+	"slices"
 	"strings"
 )
 
@@ -44,6 +45,12 @@ type preset struct {
 	args []string
 }
 
+// subtitleArgs ask for the subtitles of a video and nothing else: its own
+// where it has them, its automatic captions otherwise, as the native srt
+// that is one line per cue, which cleanSRT rewrites into blocks.
+var subtitleArgs = []string{"--skip-download", "--write-subs", "--write-auto-subs",
+	"--sub-format", "srt/vtt/best"}
+
 func ytdlpPresets() []preset {
 	video := func(h int) preset {
 		return preset{fmt.Sprintf("%dp", h), []string{"-f", fmt.Sprintf("bv*[height<=%d]+ba/b[height<=%d]", h, h)}}
@@ -57,7 +64,7 @@ func ytdlpPresets() []preset {
 		video(2160), video(1440), video(1080), video(720), video(480), video(360),
 		{"Audio only (best)", []string{"-f", "ba/bestaudio"}},
 		audio("mp3"), audio("m4a"), audio("opus"), audio("vorbis"), audio("flac"),
-		{"Subtitles only", []string{"--skip-download", "--write-subs", "--write-auto-subs", "--sub-format", "srt/vtt/best", "--sub-langs", "all", "--convert-subs", "srt"}},
+		{"Subtitles only", append(slices.Clone(subtitleArgs), "--sub-langs", "all")},
 		{"Thumbnail only", []string{"--skip-download", "--write-thumbnail", "--convert-thumbnails", "png"}},
 		{"Metadata only", []string{"--skip-download", "--write-info-json"}},
 	}

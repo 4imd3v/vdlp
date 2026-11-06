@@ -10,12 +10,13 @@ import (
 	"github.com/egoist/mygo/ui"
 )
 
-// pages are the sidebar's destinations, in order: Cmd+1 to Cmd+5 go to
-// them.
+// pages are the sidebar's destinations, in order, with Cmd+1 and up
+// going to them.
 var pages = []struct{ id, title, blurb string }{
 	{"download", "New download", "Paste a link, pick a format, download it."},
 	{"batch", "Batch download", "Many links at once, from the clipboard or a file."},
 	{"playlist", "Playlist", "List what a playlist holds and download what you choose."},
+	{"subtitles", "Subtitles", "The subtitles of a video or a playlist, two lines at a time."},
 	{"library", "Library", "The downloads of this session, with their progress."},
 	{"settings", "Settings", "Where the downloaders are, and where they write."},
 	{"logs", "Logs", "What the app did, and what went wrong."},
@@ -47,6 +48,9 @@ type app struct {
 	engine string
 	preset string
 	extra  string
+
+	// The Subtitles page.
+	subURL string
 
 	// The Batch page.
 	batch    []string // the links waiting to download
@@ -171,6 +175,10 @@ func (a *app) command(url, engineID, preset string, presetArgs []string) job {
 	if subs && a.set.SubLangs != "" {
 		args = append(args, "--sub-langs", a.set.SubLangs)
 	}
+	// A download of the subtitles alone has no video to mux them into: its
+	// files are rewritten where the engine writes them.
+	clean := subs && slices.Contains(args, "--skip-download") &&
+		(slices.Contains(args, "--write-subs") || slices.Contains(args, "--write-sub"))
 	if e.outFlag != "" && a.set.Template != "" {
 		args = append(args, e.outFlag, a.set.Template)
 	}
@@ -190,6 +198,7 @@ func (a *app) command(url, engineID, preset string, presetArgs []string) job {
 		proxy:      a.set.Proxy,
 		resumeFlag: e.resumeFlag,
 		embedSubs:  embed,
+		cleanSubs:  clean,
 	}
 }
 
@@ -285,6 +294,8 @@ func (a *app) view(c *ui.Context) {
 					a.batchPage(c)
 				case "playlist":
 					a.playlistPage(c)
+				case "subtitles":
+					a.subtitlesPage(c)
 				case "library":
 					a.libraryPage(c)
 				case "settings":
@@ -330,6 +341,8 @@ func pageIcon(id string) *ui.SVG {
 		return iconBatch
 	case "playlist":
 		return iconPlaylist
+	case "subtitles":
+		return iconSubtitles
 	case "library":
 		return iconLibrary
 	case "settings":

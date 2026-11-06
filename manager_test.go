@@ -342,3 +342,44 @@ func urls(tasks []task) string {
 	}
 	return strings.Join(out, ", ")
 }
+
+// TestManagerCleansSubtitles checks that a subtitles-only download rewrites
+// every file the engine names, as a playlist spreads them over many, into
+// blocks of the two lines a player draws.
+func TestManagerCleansSubtitles(t *testing.T) {
+	dir := t.TempDir()
+	bin := fakeEngine(t, "fake-subs",
+		"printf '1\\n00:00:00,000 --> 00:00:03,240\\nfirst line\\n\\n2\\n00:00:01,480 --> 00:00:05,160\\nsecond line\\n\\n' > one.en.srt\n"+
+			"cp one.en.srt two.en.srt\n"+
+			"echo '[download] Destination: one.en.srt'\n"+
+			"echo '[download] Destination: two.en.srt'\n")
+	a := testManager(t, dir, "yt-dlp")
+	a.set.Binaries["yt-dlp"] = bin
+	a.set.SubLangs = "en"
+	a.mgr.add(&task{
+		url:      "https://example.com/playlist",
+		engineID: "yt-dlp",
+		preset:   "Subtitles only",
+		job:      a.command("https://example.com/playlist", "yt-dlp", "Subtitles only", presetArgs("yt-dlp", "Subtitles only")),
+	})
+	deadline := time.Now().Add(10 * time.Second)
+	for time.Now().Before(deadline) {
+		if tsk := a.mgr.snapshot()[0]; tsk.state == statusDone {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if tsk := a.mgr.snapshot()[0]; tsk.state != statusDone {
+		t.Fatalf("task state %v, err %q, log %q", tsk.state, tsk.err, tsk.log)
+	}
+	for _, name := range []string{"one.en.srt", "two.en.srt"} {
+		b, err := os.ReadFile(filepath.Join(dir, name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		// One block: a number, a timing and the two lines of it.
+		if lines := strings.Split(strings.TrimSpace(string(b)), "\n"); len(lines) != 4 {
+			t.Errorf("%s after rewriting:\n%s", name, b)
+		}
+	}
+}
