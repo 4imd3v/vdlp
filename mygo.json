@@ -1,6 +1,10 @@
 {
   "name": "VDLP",
   "identifier": "dev.vdlp.app",
-  "version": "0.1.0",
-  "out": "build"
+  "version": "0.2.0",
+  "out": "build",
+  "updates": {
+    "publicKey": "K53dbqbSs81R7adTdzxdlIn7YA0WKx08jjk0OjJbyWg=",
+    "github": "4imd3v/vdlp"
+  }
 }

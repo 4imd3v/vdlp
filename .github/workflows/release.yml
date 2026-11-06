@@ -75,15 +75,22 @@ jobs:
       - name: Install NSIS
         if: matrix.name == 'Windows'
         run: sudo apt-get update && sudo apt-get install -y nsis
-      - name: Build
-        run: go tool mygo build -platform "${{ matrix.platform }}"
-      - name: Upload to the draft release
+      # -upload publishes the installers and the signed update files, and
+      # stops before building when the key is missing: an installed app could
+      # not update to a release without a manifest. uploads.github.com answers
+      # 404 for a release it has not caught up with yet, and -upload clobbers,
+      # so a retry is safe.
+      - name: Build and upload to the draft release
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
+          MYGO_UPDATER_PRIVATE_KEY: ${{ secrets.MYGO_UPDATER_PRIVATE_KEY }}
         run: |
-          files=()
-          for f in build/*/*.dmg build/*/*.exe build/*/*.deb build/*/*.tar.gz; do
-            [ -e "$f" ] && files+=("$f")
+          for attempt in 1 2 3; do
+            if go tool mygo build -platform "${{ matrix.platform }}" -upload; then
+              exit 0
+            fi
+            echo "::warning::Build or upload failed (attempt $attempt of 3), retrying"
+            sleep $((attempt * 20))
           done
-          gh release upload "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --clobber "${files[@]}"
+          exit 1

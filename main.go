@@ -10,10 +10,16 @@ import (
 	"log"
 
 	"github.com/egoist/mygo"
+	"github.com/egoist/mygo/plugins/updater"
+	"github.com/egoist/mygo/plugins/updater/native"
 	"github.com/egoist/mygo/ui"
 )
 
 func main() {
+	// The window of VDLP is ui.View, so the updater draws its window itself
+	// rather than in a web page, which would need a webview VDLP does not
+	// otherwise ship.
+	mygo.Use(native.Plugin)
 	mygo.App.WhenReady(func() {
 		set, err := loadSettings()
 		if err != nil {
@@ -70,6 +76,7 @@ func setMenu(win *mygo.Window) {
 			{Label: "About VDLP", Click: func(*mygo.MenuItem, *mygo.Window) {
 				owner(win).goTo("about")
 			}},
+			updater.MenuItem(),
 			{Label: "yt-dlp on GitHub", Click: func(*mygo.MenuItem, *mygo.Window) {
 				_ = mygo.Shell.OpenExternal("https://github.com/yt-dlp/yt-dlp")
 			}},

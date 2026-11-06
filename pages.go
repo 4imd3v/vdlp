@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/egoist/mygo"
+	"github.com/egoist/mygo/plugins/updater"
 	"github.com/egoist/mygo/ui"
 )
 
@@ -903,6 +904,12 @@ func (a *app) aboutPage(c *ui.Context) {
 	scrollPage(c, func() {
 		card(c, "VDLP", func() {
 			ui.Text(c, "A front end for the command line downloaders, as Media Downloader is, drawn by MyGo in Go.")
+			ui.Row(c).Gap(12).AlignItems(ui.Center).Children(func() {
+				if v := mygo.App.Version(); v != "" {
+					ui.Text(c, "Version "+v).TextColor(t.TextMuted)
+				}
+				ui.Button(c, "Check for updates").OnClick(updater.CheckForUpdates)
+			})
 			ui.Text(c, "It drives yt-dlp, youtube-dl, gallery-dl, lux, you-get, svtplay-dl, aria2c, wget and Safari Books. Each is a program you install yourself; the app only tells it what to fetch.").TextColor(t.TextMuted)
 			ui.Row(c).Gap(8).Children(func() {
 				ui.Button(c, "yt-dlp").OnClick(func() { _ = mygo.Shell.OpenExternal("https://github.com/yt-dlp/yt-dlp") })

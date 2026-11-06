@@ -67,24 +67,48 @@ look at the layout without a window; `VDLP_RENDER_DIR=/tmp` says where.
 `zrender_test.go` hold the tests: the view driven through `ui.NewTester`, real
 downloads run against a shell script, and the pages drawn to PNGs.
 
-## Releasing
+## Releasing and updates
 
-Bump `version` in `mygo.json`, commit, and push the tag of that version:
+Bump `version` in `mygo.json`, write its section in `CHANGELOG.md` — that
+section is the release notes the app shows — commit, and push the tag of that
+version:
 
 ```sh
-git tag v0.1.0
-git push origin v0.1.0
+git tag v0.2.0
+git push origin v0.2.0
 ```
 
 `.github/workflows/release.yml` runs the tests, builds Windows, Linux and macOS
-on a runner of each, and uploads the disk image, the installers, the `.deb` and
-the `.tar.gz` to a draft release, which you review and publish. The tag must be
-the version in `mygo.json` — the workflow checks it before it builds anything.
+on a runner of each with `mygo build -upload`, and uploads the disk image, the
+installers, the `.deb`, the `.tar.gz` and the signed update files to a draft
+release. The tag must be the version in `mygo.json`: the workflow checks it
+before it builds anything. Publishing the draft is what makes installed apps
+see the version — `-upload` stops before building when the signing key is
+missing, so a release without one is never published.
 
-Nothing is signed with a key of yours yet: the macOS app is signed ad hoc, so
-Gatekeeper asks the user to right-click and Open it the first time, and Windows
-warns SmartScreen. Signing needs a Developer ID certificate and notarization,
-and a Windows certificate, as MyGo's distribution docs describe.
+An installed VDLP checks for a new version ten seconds after it starts, then
+once a day, and shows what changed with an **Install Update** / **Remind Me
+Later** / **Skip This Version** window; **Check for Updates…** in the Help menu
+asks at once (`mygo/update-keys` holds the details). It downloads only what
+changed when the release has a delta for the version it runs, checks the
+signature with the public key built into it, replaces itself, and relaunches.
+
+- The update key is `~/.config/mygo/update-keys/mygo-update.key` (`go tool
+  mygo keygen`). Its public key is `updates.publicKey` in `mygo.json`, and the
+  secret is the repository's `MYGO_UPDATER_PRIVATE_KEY` secret. Keep it in a
+  password manager as well: installed apps refuse anything signed with another
+  key, so losing it strands them on the version they have.
+- Installations that can update themselves are the macOS app, the Windows
+  installer's per-user install, and the Linux archive `install.sh` puts in
+  `~/.local/vdlp.app`. The `.deb` is installed in `/opt`, so Debian updates it
+  and the app does not.
+- The update archives are signed with the update key, but the binaries are not
+  code-signed: the macOS app is signed ad hoc, so Gatekeeper asks the user to
+  right-click and Open it the first time, and Windows warns SmartScreen.
+  Signing needs a Developer ID certificate and notarization, and a Windows
+  certificate, as MyGo's distribution docs describe.
+- An update relaunches the app, and the queue is given up as it quits: a
+  download running when the update installs does not survive it.
 
 ## Before you use it
 

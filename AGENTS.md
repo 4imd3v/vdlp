@@ -61,7 +61,7 @@ commit step unless they explicitly asked you to commit.
 
 | File | What it holds |
 |---|---|
-| `main.go` | the window, the app menus, and quitting |
+| `main.go` | the window, the app menus, the updater plugin, and quitting |
 | `app.go` | the app's state, the view, the sidebar, and the parts the pages share |
 | `pages.go` | the seven pages |
 | `engines.go` | the downloaders, their presets, and the guess from a link's host |
