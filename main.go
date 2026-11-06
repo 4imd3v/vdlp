@@ -1,59 +1,84 @@
+// VDLP is a front end for the command line media downloaders: yt-dlp,
+// youtube-dl, gallery-dl, lux, you-get, svtplay-dl, aria2c, wget and Safari
+// Books, as Media Downloader drives them, with a native interface MyGo
+// draws itself in Go.
+//
+//	go tool mygo dev
 package main
 
 import (
-	"fmt"
 	"log"
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 )
 
-// app is the state the window shows. Its view builds the interface from
-// it, on the main thread, whenever the window needs a frame: after input,
-// after Window.Update, and while something animates.
-type app struct {
-	name  string
-	count int
-}
-
-func (a *app) view(c *ui.Context) {
-	t := c.Theme()
-	ui.Column(c).Fill().Center().Gap(16).Padding(24).Children(func() {
-		ui.Text(c, "vdlp").FontSize(26).Bold()
-		ui.TextInput(c, &a.name).Placeholder("Your name").Label("Name").Width(240)
-		greeting := "Hello!"
-		if a.name != "" {
-			greeting = fmt.Sprintf("Hello, %s!", a.name)
-		}
-		ui.Text(c, greeting).TextColor(t.TextMuted)
-		ui.Row(c).Gap(10).AlignItems(ui.Center).Children(func() {
-			if ui.Button(c, "−").Width(44).Clicked() {
-				a.count--
-			}
-			ui.Textf(c, "%d", a.count).FontSize(20).Width(48).TextAlign(ui.Center)
-			if ui.PrimaryButton(c, "+").Width(44).Clicked() {
-				a.count++
-			}
-		})
-	})
-}
-
 func main() {
-	a := &app{}
 	mygo.App.WhenReady(func() {
-		mygo.NewWindow(mygo.WindowOptions{
-			Title:     "vdlp",
-			Width:     480,
-			Height:    360,
-			MinWidth:  320,
-			MinHeight: 280,
+		set, err := loadSettings()
+		if err != nil {
+			log.Println("vdlp: loading settings:", err)
+		}
+		a := newApp(set)
+		win := mygo.NewWindow(mygo.WindowOptions{
+			Title:     "VDLP",
+			Width:     1000,
+			Height:    720,
+			MinWidth:  640,
+			MinHeight: 480,
 			// Opens where the user left it last time.
 			StateKey: "main",
-			// The window shows the interface MyGo draws, not a web page.
-			Content: ui.View(a.view),
+			Content:  ui.View(a.view),
 		})
+		a.win = win
+		apps[win] = a
+		setMenu(win)
+		// Downloads in the queue are given up as the app quits.
+		mygo.App.OnWillQuit(func(*mygo.QuitEvent) { owner(win).mgr.stopAll() })
 	})
 	if err := mygo.App.Run(); err != nil {
 		log.Fatal(err)
 	}
 }
+
+// setMenu gives the app the menus a downloader is expected to have.
+func setMenu(win *mygo.Window) {
+	goTo := []*mygo.MenuItem{}
+	for i, p := range pages {
+		goTo = append(goTo, &mygo.MenuItem{
+			Label:       p.title,
+			Accelerator: "CmdOrCtrl+" + string(rune('1'+i)),
+			Click:       func(*mygo.MenuItem, *mygo.Window) { owner(win).goTo(p.id) },
+		})
+	}
+	mygo.App.SetMenu(mygo.NewMenu([]*mygo.MenuItem{
+		{Label: "File", Submenu: []*mygo.MenuItem{
+			{Label: "New download", Accelerator: "CmdOrCtrl+N", Click: func(*mygo.MenuItem, *mygo.Window) {
+				owner(win).goTo("download")
+			}},
+			{Label: "Import links…", Accelerator: "CmdOrCtrl+O", Click: func(*mygo.MenuItem, *mygo.Window) {
+				owner(win).importLinks()
+			}},
+			mygo.Separator(),
+			{Label: "Quit", Role: mygo.RoleQuit},
+		}},
+		{Label: "Go", Submenu: goTo},
+		{Label: "Help", Submenu: []*mygo.MenuItem{
+			{Label: "About VDLP", Click: func(*mygo.MenuItem, *mygo.Window) {
+				owner(win).goTo("about")
+			}},
+			{Label: "yt-dlp on GitHub", Click: func(*mygo.MenuItem, *mygo.Window) {
+				_ = mygo.Shell.OpenExternal("https://github.com/yt-dlp/yt-dlp")
+			}},
+		}},
+	}))
+}
+
+// owner returns the app whose state the window shows.
+func owner(win *mygo.Window) *app {
+	return apps[win]
+}
+
+// apps maps the windows to the app state they show, so the menus can reach
+// it. The state itself lives in the window's view.
+var apps = map[*mygo.Window]*app{}
