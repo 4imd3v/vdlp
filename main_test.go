@@ -86,18 +86,26 @@ func TestQueueCarriesOptions(t *testing.T) {
 	}
 }
 
-// TestDownloadPageEmbedsSubtitles checks that the subtitle controls on the
-// download page reach the settings.
-func TestDownloadPageEmbedsSubtitles(t *testing.T) {
-	a, tt := testApp(t)
-	a.page, a.url = "download", "https://www.youtube.com/watch?v=x"
-	tt.Frame()
-	if err := tt.Click("Embed the subtitles in the video"); err != nil {
-		t.Fatal(err)
-	}
-	tt.Frame()
-	if !a.set.EmbedSubs {
-		t.Error("the switch on the download page did not reach the settings")
+// TestPagesEmbedSubtitles checks that every page which queues a download
+// offers the subtitle choice, and that clicking it reaches the setting the
+// command is made from.
+func TestPagesEmbedSubtitles(t *testing.T) {
+	for _, page := range []string{"download", "batch", "playlist"} {
+		a, tt := testApp(t)
+		a.page = page
+		a.url, a.batchURL, a.listURL = "https://www.youtube.com/watch?v=x", "https://youtu.be/x", "https://youtu.be/x"
+		tt.Frame()
+		if !tt.HasText("Embed the subtitles in the video") {
+			t.Errorf("the %s page offers no subtitle choice", page)
+			continue
+		}
+		if err := tt.Click("Embed the subtitles in the video"); err != nil {
+			t.Fatal(err)
+		}
+		tt.Frame()
+		if !a.set.EmbedSubs {
+			t.Errorf("the %s page did not reach the setting", page)
+		}
 	}
 }
 

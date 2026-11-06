@@ -58,22 +58,7 @@ func (a *app) downloadPage(c *ui.Context) {
 			}
 			ui.TextInput(c, &a.extra).Placeholder("Extra options, e.g. --embed-subs --embed-thumbnail").Grow(1)
 			muted(c, "Extra options are split as a shell splits them, and added to the command line.")
-			// Subtitles: local copies of the settings, written back once
-			// the inputs have applied the change, as a preset is.
-			if e := engineByID(a.engine); e.subsArgs != nil {
-				embed, langs := a.set.EmbedSubs, a.set.SubLangs
-				ui.Row(c).Gap(12).AlignItems(ui.Center).Children(func() {
-					ui.Checkbox(c, &embed, "Embed the subtitles in the video").Shrink(0)
-					ui.TextInput(c, &langs).Placeholder("Languages, e.g. en,ja — empty for the engine's choice").Grow(1).OnChange(func() {
-						a.set.SubLangs = langs
-						a.save()
-					})
-				})
-				if embed != a.set.EmbedSubs {
-					a.set.EmbedSubs = embed
-					a.save()
-				}
-			}
+			a.subtitleOptions(c)
 			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 				ui.Button(c, "Get formats").Disabled(a.url == "" || a.fetching).OnClick(a.fetchFormats)
 				if a.fetching {
@@ -138,6 +123,29 @@ func (a *app) downloadSubtitles() {
 	})
 	a.subURL = ""
 	a.goTo("library")
+}
+
+// subtitleOptions is the subtitle choice of every page that queues a
+// download: one setting, so a click on one page is a click on all of them.
+// It is absent for an engine that cannot embed them.
+func (a *app) subtitleOptions(c *ui.Context) {
+	if engineByID(a.engine).subsArgs == nil {
+		return
+	}
+	// Local copies of the settings, written back once the inputs have
+	// applied the change, as a preset is.
+	embed, langs := a.set.EmbedSubs, a.set.SubLangs
+	ui.Row(c).Gap(12).AlignItems(ui.Center).Children(func() {
+		ui.Checkbox(c, &embed, "Embed the subtitles in the video").Shrink(0)
+		ui.TextInput(c, &langs).Placeholder("Languages, e.g. en,ja — empty for the engine's choice").Grow(1).OnChange(func() {
+			a.set.SubLangs = langs
+			a.save()
+		})
+	})
+	if embed != a.set.EmbedSubs {
+		a.set.EmbedSubs = embed
+		a.save()
+	}
 }
 
 // fetchError shows why asking an engine about a link failed.
@@ -340,6 +348,8 @@ func (a *app) batchPage(c *ui.Context) {
 			})
 		})
 
+		card(c, "Subtitles", func() { a.subtitleOptions(c) })
+
 		if len(a.batch) == 0 {
 			emptyState(c, iconBatch, "No links yet. Add them one by one, or import a file with one link per line.")
 			return
@@ -404,6 +414,8 @@ func (a *app) playlistPage(c *ui.Context) {
 				})
 			}
 		})
+
+		card(c, "Subtitles", func() { a.subtitleOptions(c) })
 
 		a.fetchError(c)
 
