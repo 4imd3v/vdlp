@@ -81,7 +81,7 @@ it found one.
 - **Subtitles** — the subtitles of a video or of every video in a playlist,
   fetched as they are and rewritten into blocks of the two lines a player
   draws, so they stay where they are put. A video download can have them
-  embedded as it is saved, in the languages you name.
+  embedded as it is saved, in the language you choose.
 - **Library** — the downloads of this session, with progress, speed and ETA;
   pause, resume, start over, open the file, show it in its folder, read what the
   downloader said, and copy the link.

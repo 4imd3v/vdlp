@@ -91,12 +91,8 @@ func (a *app) subtitlesPage(c *ui.Context) {
 		})
 
 		card(c, "Which languages", func() {
-			// A local copy of the setting, written back once the input has
-			// applied the change, as the download page's is.
-			langs := a.set.SubLangs
-			ui.TextInput(c, &langs).Placeholder("Languages, e.g. en,ja — empty for the engine's own choice").Grow(1).OnChange(func() {
-				a.set.SubLangs = langs
-				a.save()
+			ui.Row(c).Gap(8).Children(func() {
+				a.languageSelect(c)
 			})
 			muted(c, "Automatic captions are downloaded when a video has no subtitles of its own, and are rewritten into clean blocks of two lines.")
 			muted(c, "One .srt per video, in the downloads folder.")
@@ -125,6 +121,83 @@ func (a *app) downloadSubtitles() {
 	a.goTo("library")
 }
 
+// subLangs are the subtitle languages the pages offer, as the engines spell
+// them. The first two ask for the engine's own choice, and for all of them.
+var subLangs = []struct{ name, code string }{
+	{"The engine's choice", ""},
+	{"All languages", "all"},
+	{"English", "en"},
+	{"Spanish", "es"},
+	{"Portuguese", "pt"},
+	{"French", "fr"},
+	{"German", "de"},
+	{"Italian", "it"},
+	{"Dutch", "nl"},
+	{"Polish", "pl"},
+	{"Russian", "ru"},
+	{"Ukrainian", "uk"},
+	{"Turkish", "tr"},
+	{"Arabic", "ar"},
+	{"Hindi", "hi"},
+	{"Indonesian", "id"},
+	{"Vietnamese", "vi"},
+	{"Thai", "th"},
+	{"Korean", "ko"},
+	{"Japanese", "ja"},
+	{"Chinese (Simplified)", "zh-Hans"},
+	{"Chinese (Traditional)", "zh-Hant"},
+}
+
+// langNames are the options of the language select, in order, with the
+// setting's own value last when the list does not know it: it was typed
+// before it became a choice, and losing it would change the download.
+func langNames(current string) []string {
+	names := make([]string, 0, len(subLangs)+1)
+	known := false
+	for _, l := range subLangs {
+		names = append(names, l.name)
+		known = known || l.code == current
+	}
+	if current != "" && !known {
+		names = append(names, current)
+	}
+	return names
+}
+
+// langName is what the select shows for a language: the name the list gives
+// it, and the value itself when the list has none for it.
+func langName(code string) string {
+	for _, l := range subLangs {
+		if l.code == code {
+			return l.name
+		}
+	}
+	return code
+}
+
+// langCode is the language a select option stands for.
+func langCode(name string) string {
+	for _, l := range subLangs {
+		if l.name == name {
+			return l.code
+		}
+	}
+	return name
+}
+
+// languageSelect is the subtitle language choice, in the settings so that it
+// is the same on every page that offers it.
+func (a *app) languageSelect(c *ui.Context) {
+	// A local copy: the select writes the choice through its pointer as it
+	// returns, and the app takes it from there.
+	name := langName(a.set.SubLangs)
+	ui.Select(c, &name, langNames(a.set.SubLangs)).Grow(1)
+	if code := langCode(name); code != a.set.SubLangs {
+		a.set.SubLangs = code
+		a.save()
+	}
+}
+
 // subtitleOptions is the subtitle choice of every page that queues a
 // download: one setting, so a click on one page is a click on all of them.
 // It is absent for an engine that cannot embed them.
@@ -132,15 +205,11 @@ func (a *app) subtitleOptions(c *ui.Context) {
 	if engineByID(a.engine).subsArgs == nil {
 		return
 	}
-	// Local copies of the settings, written back once the inputs have
-	// applied the change, as a preset is.
-	embed, langs := a.set.EmbedSubs, a.set.SubLangs
+	// A local copy, for the same reason.
+	embed := a.set.EmbedSubs
 	ui.Row(c).Gap(12).AlignItems(ui.Center).Children(func() {
 		ui.Checkbox(c, &embed, "Embed the subtitles in the video").Shrink(0)
-		ui.TextInput(c, &langs).Placeholder("Languages, e.g. en,ja — empty for the engine's choice").Grow(1).OnChange(func() {
-			a.set.SubLangs = langs
-			a.save()
-		})
+		a.languageSelect(c)
 	})
 	if embed != a.set.EmbedSubs {
 		a.set.EmbedSubs = embed

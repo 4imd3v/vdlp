@@ -26,8 +26,9 @@ type settings struct {
 	MaxActive int `json:"maxActive"`
 	// EmbedSubs downloads the subtitles and embeds them in the video.
 	EmbedSubs bool `json:"embedSubs"`
-	// SubLangs is the languages of those subtitles, as the engine spells
-	// them; "" asks for the engine's own choice.
+	// SubLangs is the language of those subtitles, as the engine spells it,
+	// chosen from the list the pages offer; "" asks for the engine's own
+	// choice, and "all" for every one the video has.
 	SubLangs string `json:"subLangs"`
 	// Cookies is a cookies file passed to engines that take one.
 	Cookies string `json:"cookies"`

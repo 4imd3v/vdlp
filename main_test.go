@@ -141,6 +141,44 @@ func TestSubtitlesPage(t *testing.T) {
 	}
 }
 
+// TestSubtitleLanguage checks the language select: the value the setting
+// holds is the one it shows, a language chosen on a page reaches it, and a
+// value typed before the select existed is offered rather than lost.
+func TestSubtitleLanguage(t *testing.T) {
+	for code, want := range map[string]string{"": "The engine's choice", "ja": "Japanese", "en,ja": "en,ja"} {
+		if got := langName(code); got != want {
+			t.Errorf("langName(%q) = %q, want %q", code, got, want)
+		}
+		if got := langCode(want); got != code {
+			t.Errorf("langCode(%q) = %q, want %q", want, got, code)
+		}
+	}
+	if names := langNames("en,ja"); names[len(names)-1] != "en,ja" {
+		t.Errorf("a value the list does not know is not offered: %q", names)
+	}
+	if got, want := len(langNames("ja")), len(subLangs); got != want {
+		t.Errorf("a known language adds an option: %d, want %d", got, want)
+	}
+
+	a, tt := testApp(t)
+	a.page, a.set.SubLangs = "download", "ja"
+	tt.Frame()
+	if !tt.HasText("Japanese") {
+		t.Fatalf("the page does not show the language the setting holds: %q", tt.Texts())
+	}
+	if err := tt.Click("Japanese"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if err := tt.Click("Korean"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if a.set.SubLangs != "ko" {
+		t.Errorf("the language chosen is %q, want ko", a.set.SubLangs)
+	}
+}
+
 // TestEngineFromLink checks the guess the app makes from a link's host.
 func TestEngineFromLink(t *testing.T) {
 	for url, want := range map[string]string{
