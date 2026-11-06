@@ -141,8 +141,8 @@ section is the release notes the app shows — commit, and push the tag of that
 version:
 
 ```sh
-git tag v0.2.1
-git push origin v0.2.1
+git tag v0.2.2
+git push origin v0.2.2
 ```
 
 `.github/workflows/release.yml` runs the tests, builds Windows, Linux and macOS

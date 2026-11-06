@@ -2,6 +2,15 @@
 
 The section of a version here is the release notes the update window shows.
 
+## 0.2.2
+
+- The subtitle choice is on every page that downloads — New download, Batch
+  download and Playlist — and the language is picked from a list instead of
+  typed.
+- The formats table drew each format's id twice, so a long one wrapped out of
+  its column and made the row twice as tall; the playlist page did the same
+  with the entry titles.
+
 ## 0.2.1
 
 - A Subtitles page: paste a video or a playlist and VDLP downloads the
