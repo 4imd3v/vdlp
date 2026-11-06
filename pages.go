@@ -3,8 +3,10 @@ package main
 import (
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"os/exec"
+	"runtime/debug"
 	"strings"
 
 	"github.com/egoist/mygo"
@@ -416,12 +418,24 @@ func (a *app) ask(url string, flat bool, _ string) {
 	}
 	a.fetching, a.fetchErr, a.info, a.chosen = true, "", nil, map[string]bool{}
 	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				a.log.logger().Error("panic while asking about a link", "url", url,
+					"panic", fmt.Sprint(r), "stack", string(debug.Stack()))
+				a.win.Update(func() {
+					a.fetching = false
+					a.fetchErr = fmt.Sprintf("the app failed while asking about this link: %v", r)
+				})
+			}
+		}()
 		info, err := fetchInfo(e, a.set.Binaries[e.id], url, flat)
 		a.win.Update(func() {
 			a.fetching = false
 			switch {
 			case err != nil:
 				a.fetchErr = err.Error()
+				a.log.logger().Warn("asking about a link failed", "url", url,
+					"engine", e.id, "err", err)
 			case flat && len(info.entries) == 0:
 				a.fetchErr = "That link holds no playlist."
 			default:
@@ -775,6 +789,112 @@ func (a *app) chooseCookies() {
 		file := paths[0]
 		a.win.Update(func() { a.set.Cookies = file })
 	}()
+}
+
+// logsPage is what the app did, and what went wrong: the tail of the log,
+// with the file it is written to for anything the memory has already
+// forgotten.
+func (a *app) logsPage(c *ui.Context) {
+	t := c.Theme()
+	entries := a.log.tail()
+
+	ui.Column(c).Fill().Padding(4, 26, 26).Gap(12).Children(func() {
+		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+			ui.Segmented(c, &a.logFilter, "All", "Errors", "Warnings").Label("Show")
+			ui.Spacer(c)
+			ui.Button(c, "Copy").Disabled(len(entries) == 0).OnClick(func() {
+				a.setClipboard(a.log.text())
+				c.Toast("Log copied")
+			})
+			ui.Button(c, "Open log file").OnClick(a.openLogFile)
+		})
+
+		if len(entries) == 0 {
+			emptyState(c, iconLogs, "Nothing logged yet.")
+			return
+		}
+
+		shown := a.filteredLog(entries)
+		if len(shown) == 0 {
+			ui.Column(c).Padding(24).AlignItems(ui.Center).Children(func() {
+				muted(c, "Nothing of that kind in the log.")
+			})
+			return
+		}
+		// A log follows its end, as a chat does, until the user scrolls
+		// away to read something.
+		a.logRow.FollowEnd = true
+		a.logRow.Key = func(i int) any { return shown[i].at.UnixNano() }
+		ui.List(c, &a.logRow, len(shown), func(i int) {
+			a.logEntry(c, shown[i])
+		}).Grow(1)
+
+		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+			ui.Icon(c, iconFile).FontSize(13).TextColor(t.TextMuted).Shrink(0)
+			ui.Text(c, a.log.path).TextColor(t.TextMuted).SingleLine().Grow(1).Selectable()
+		})
+	})
+}
+
+// logRow2 is one entry of the log.
+func (a *app) logEntry(c *ui.Context, e entry) {
+	t := c.Theme()
+	ui.Row(c).Gap(10).Padding(4, 8).AlignItems(ui.Start).Children(func() {
+		ui.Text(c, e.at.Format("15:04:05")).Font("monospace").FontSize(12).
+			TextColor(t.TextMuted).Shrink(0)
+		ui.Text(c, e.level.String()).FontSize(12).TextColor(levelColor(c, e.level)).
+			Width(56).Shrink(0)
+		ui.Column(c).Gap(2).Grow(1).MinWidth(0).Children(func() {
+			ui.Text(c, e.msg).SingleLine()
+			for _, attr := range e.attrs {
+				ui.Text(c, attr).Font("monospace").FontSize(12).
+					TextColor(t.TextMuted).SingleLine().Selectable()
+			}
+		})
+	}).ContextMenu(func(m *ui.Menu) {
+		if m.Item("Copy this entry").Chosen() {
+			a.setClipboard(e.String())
+		}
+	})
+}
+
+// levelColor says how a log entry's level reads.
+func levelColor(c *ui.Context, l slog.Level) ui.Color {
+	t := c.Theme()
+	switch {
+	case l >= slog.LevelError:
+		return t.Danger
+	case l >= slog.LevelWarn:
+		return t.Warning
+	}
+	return t.TextMuted
+}
+
+// filteredLog returns the entries the Logs page's filter shows.
+func (a *app) filteredLog(entries []entry) []entry {
+	var out []entry
+	for _, e := range entries {
+		switch a.logFilter {
+		case 1: // Errors
+			if e.level < slog.LevelError {
+				continue
+			}
+		case 2: // Warnings
+			if e.level < slog.LevelWarn || e.level >= slog.LevelError {
+				continue
+			}
+		}
+		out = append(out, e)
+	}
+	return out
+}
+
+// openLogFile shows the log file in the system's file manager.
+func (a *app) openLogFile() {
+	if a.log == nil || a.log.path == "" {
+		return
+	}
+	mygo.Shell.ShowItemInFolder(a.log.path)
 }
 
 // aboutPage says what the app is and what it is not.

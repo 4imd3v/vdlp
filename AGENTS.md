@@ -50,6 +50,7 @@ than by hand, so it stays in step with the pinned version.
 | `downloader.go` | the download queue, the task, and folding a downloader's output |
 | `info.go` | what an engine's `-J` says about a link |
 | `settings.go` | the settings, kept as JSON in the app's data directory |
+| `logs.go` | the log: a file on disk, and the tail the Logs page shows |
 | `icons.go` | the icons, drawn from SVG paths |
 
 `app` is the state the window shows. `pages` (in `app.go`) is the sidebar's
@@ -119,6 +120,16 @@ scroll and `Fill` the column (which is what `libraryPage` does).
 - Errors from the engines are shown in `fetchError`, and a task's failure in
   its row. Do not `log.Fatal` on a download that failed: it belongs to the user
   to see and retry.
+- **Log through `slog`, never `fmt.Println`.** `app.log` holds the handler; a
+  manager logs through `m.log()`, a page through `a.log.logger()`. A record
+  reaches both the file (a line of JSON, so a tool can read it) and the tail
+  the Logs page shows. Every failure path logs what it took: the URL, the
+  binary and its full argv, the folder, the error, and the downloader's last
+  line of output. An error is passed as `err`, which the handler renders as
+  its message rather than as `{}`.
+- **Recover panics in goroutines and log them.** `run` and the fetch in `ask`
+  both do, with `debug.Stack()`. A panic that is only printed to the terminal
+  is invisible to the user and to anyone reading the log afterwards.
 - Icons are SVG paths in `icons.go`, parsed once at package level with
   `ui.MustParseSVG`. Add one there, do not build SVGs in the view.
 - Comments say *why*, one line, when the code cannot show it. The invariants

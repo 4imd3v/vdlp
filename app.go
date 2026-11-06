@@ -17,6 +17,7 @@ var pages = []struct{ id, title, blurb string }{
 	{"playlist", "Playlist", "List what a playlist holds and download what you choose."},
 	{"library", "Library", "The downloads of this session, with their progress."},
 	{"settings", "Settings", "Where the downloaders are, and where they write."},
+	{"logs", "Logs", "What the app did, and what went wrong."},
 	{"about", "About", "What this app is, and what it is not."},
 }
 
@@ -35,6 +36,7 @@ type app struct {
 	win *mygo.Window
 	mgr *manager
 	set settings
+	log *appLog
 
 	// page is the sidebar's choice.
 	page string
@@ -73,6 +75,10 @@ type app struct {
 	// The Settings page.
 	engineRow ui.ListState
 
+	// The Logs page.
+	logRow    ui.ListState
+	logFilter int
+
 	// services are captured once, for the clipboard, and used from the
 	// view's actions rather than from the Context itself.
 	services     ui.Services
@@ -102,17 +108,26 @@ type mediaEntry struct {
 }
 
 func newApp(set settings) *app {
+	lg, err := openLog()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "vdlp: opening the log:", err)
+	}
+	log := lg.logger()
 	a := &app{
 		set:    set,
 		page:   pages[0].id,
 		engine: set.Engine,
 		preset: set.Presets[set.Engine],
 		chosen: map[string]bool{},
+		log:    lg,
 	}
+	log.Info("started", "version", mygo.App.Version(), "engine", a.engine,
+		"folder", a.set.DownloadDir, "atOnce", a.set.MaxActive, "log", lg.path)
 	if a.preset == "" {
 		a.preset = engineByID(a.engine).presets[0].name
 	}
 	a.mgr = newManager(set.MaxActive, a.command)
+	a.mgr.logger = log
 	a.mgr.publish = func() { a.win.Update(func() {}) }
 	a.mgr.awake = func() func() {
 		if !a.set.KeepAwake {
@@ -222,7 +237,7 @@ func (a *app) setPreset(name string) {
 // keeps working without them.
 func (a *app) save() {
 	if err := a.set.save(); err != nil {
-		fmt.Fprintln(os.Stderr, "vdlp: saving settings:", err)
+		a.log.logger().Error("saving the settings", "err", err)
 	}
 	a.mgr.setMax(a.set.MaxActive)
 }
@@ -261,6 +276,8 @@ func (a *app) view(c *ui.Context) {
 					a.libraryPage(c)
 				case "settings":
 					a.settingsPage(c)
+				case "logs":
+					a.logsPage(c)
 				case "about":
 					a.aboutPage(c)
 				}
@@ -304,6 +321,8 @@ func pageIcon(id string) *ui.SVG {
 		return iconLibrary
 	case "settings":
 		return iconSettings
+	case "logs":
+		return iconLogs
 	default:
 		return iconAbout
 	}

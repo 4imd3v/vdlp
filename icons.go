@@ -33,5 +33,6 @@ var (
 	iconFile     = icon(`<path d="M14 3v5h5"/><path d="M19 21H5a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h9l5 5v12a1 1 0 0 1-1 1z"/>`)
 	iconSearch   = icon(`<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>`)
 	iconWarn     = icon(`<path d="M12 3 2.5 20h19z"/><path d="M12 10v4M12 17h.01"/>`)
+	iconLogs     = icon(`<path d="M5 4h11l3 3v13a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1z"/><path d="M8 10h7M8 14h7M8 18h4"/>`)
 	iconExternal = icon(`<path d="M14 4h6v6"/><path d="M20 4 10 14"/><path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/>`)
 )

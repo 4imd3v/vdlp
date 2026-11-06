@@ -27,6 +27,7 @@ func TestRenderPages(t *testing.T) {
 	a.mgr.setState(a.mgr.snapshot()[1].id, statusRunning)
 	a.queue("https://example.com/broken.zip", "Best", nil)
 	a.mgr.setState(a.mgr.snapshot()[2].id, statusFailed)
+	a.logFilter = 0
 	a.batch = []string{"https://example.com/a.mp4", "https://example.com/b.mp4"}
 	a.info = &mediaInfo{
 		title:    "A playlist of things",
@@ -45,6 +46,15 @@ func TestRenderPages(t *testing.T) {
 			{id: "best", ext: "mp4", note: "best", width: 1920, height: 1080, size: 20000000, video: true, audio: true},
 		},
 	}
+	// Fill the log with something of every kind, so the page has a shape.
+	// The list follows its end, so the newest entries are the ones in view.
+	for i := 0; i < 12; i++ {
+		a.log.logger().Info("download finished", "url", "https://example.com/z", "size", "12.3 MiB")
+	}
+	a.log.logger().Warn("asking about a link failed", "url", "https://example.com/x", "err", "HTTP Error 404")
+	a.log.logger().Error("download failed", "url", "https://example.com/y",
+		"bin", "/usr/bin/yt-dlp", "args", []string{"-f", "bv*+ba/b"}, "err", "exit status 1")
+
 	dir := os.Getenv("VDLP_RENDER_DIR")
 	if dir == "" {
 		dir = "/tmp"

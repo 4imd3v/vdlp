@@ -20,6 +20,9 @@ func main() {
 			log.Println("vdlp: loading settings:", err)
 		}
 		a := newApp(set)
+		if err != nil {
+			a.log.logger().Error("loading the settings, using the defaults", "err", err)
+		}
 		win := mygo.NewWindow(mygo.WindowOptions{
 			Title:     "VDLP",
 			Width:     1000,

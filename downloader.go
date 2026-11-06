@@ -9,11 +9,14 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime/debug"
 	"slices"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
+
+	"log/slog"
 )
 
 // status is where a download stands.
@@ -135,6 +138,8 @@ type manager struct {
 	awake func() func()
 	// notify reports a finished download.
 	notify func(task)
+	// logger is where the manager reports what it did and what went wrong.
+	logger *slog.Logger
 
 	running      int
 	awakeHeld    bool
@@ -159,6 +164,30 @@ func (m *manager) setMax(n int) {
 	m.max = n
 	m.mu.Unlock()
 	m.startNext()
+}
+
+// log returns the slog logger the manager logs through.
+func (m *manager) log() *slog.Logger {
+	if m.logger == nil {
+		return slog.New(slog.DiscardHandler)
+	}
+	return m.logger
+}
+
+// abandon takes a task out of the running set after a panic, so the queue
+// does not stall on a download that will never report back. It does nothing
+// unless the task is still running, so it is safe to call after finish has
+// already run.
+func (m *manager) abandon(t *task, err error) {
+	m.mu.Lock()
+	if t.state == statusRunning {
+		m.running--
+		t.state, t.err = statusFailed, err.Error()
+		t.endedAt = time.Now()
+	}
+	m.mu.Unlock()
+	m.startNext()
+	m.publish()
 }
 
 // add queues a download and returns it. Its job must already be made.
@@ -356,6 +385,15 @@ func (m *manager) keepAwake() {
 // it, and cancel releases it as run returns.
 func (m *manager) run(t *task, ctx context.Context, cancel context.CancelFunc) {
 	defer cancel()
+	// A panic here would take the process down with only a stack on the
+	// terminal: log it, and leave the queue able to carry on.
+	defer func() {
+		if r := recover(); r != nil {
+			m.log().Error("panic in a download", "url", t.url, "panic", fmt.Sprint(r),
+				"stack", string(debug.Stack()))
+			m.abandon(t, fmt.Errorf("the app failed while running this download: %v", r))
+		}
+	}()
 	// What the download runs with is read once, under the mutex: the view
 	// may change the settings, or pause this download, while it goes.
 	m.mu.Lock()
@@ -382,18 +420,20 @@ func (m *manager) run(t *task, ctx context.Context, cancel context.CancelFunc) {
 	// carries both, so the lines stay in order.
 	out, err := cmd.StdoutPipe()
 	if err != nil {
-		m.finish(t, err)
+		m.failed(t, j, err)
 		return
 	}
 	cmd.Stderr = cmd.Stdout
 
 	if err := cmd.Start(); err != nil {
-		m.finish(t, fmt.Errorf("%s: %w", j.bin, err))
+		m.failed(t, j, fmt.Errorf("%s: %w", j.bin, err))
 		return
 	}
 	// The command is reaped on a goroutine of its own, and the output is
 	// cut short when it ends: reading to the end of the pipe first would
 	// leave a task waiting on a child that outlived its downloader.
+	m.log().Info("download started", "url", t.url, "bin", j.bin, "args", j.args, "dir", j.dir)
+
 	waited := make(chan error, 1)
 	go func() {
 		err := cmd.Wait()
@@ -401,7 +441,26 @@ func (m *manager) run(t *task, ctx context.Context, cancel context.CancelFunc) {
 		waited <- err
 	}()
 	m.scan(t, out)
-	m.finish(t, <-waited)
+	if err = <-waited; err != nil {
+		m.failed(t, j, err)
+		return
+	}
+	m.finish(t, nil)
+}
+
+// failed logs why a download could not run, and reports it to the task. The
+// downloader's own last words say more than its exit status, so they are
+// logged with it.
+func (m *manager) failed(t *task, j job, err error) {
+	m.mu.Lock()
+	last := ""
+	if n := len(t.log); n > 0 {
+		last = t.log[n-1]
+	}
+	m.mu.Unlock()
+	m.log().Error("download failed", "url", t.url, "bin", j.bin, "args", j.args,
+		"dir", j.dir, "err", err, "lastOutput", last)
+	m.finish(t, err)
 }
 
 // scan reads the downloader's output a line at a time and folds each line
@@ -487,6 +546,9 @@ func (m *manager) finish(t *task, err error) {
 	m.mu.Unlock()
 
 	m.startNext()
+	if finished.state == statusDone {
+		m.log().Info("download finished", "url", t.url, "file", t.path(), "size", t.size)
+	}
 	// A task removed while it ran is not reported: the user took it away.
 	if m.notify != nil && m.holds(t) && (finished.state == statusDone || finished.state == statusFailed) {
 		m.notify(finished)
