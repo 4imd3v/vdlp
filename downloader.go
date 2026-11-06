@@ -19,6 +19,12 @@ import (
 	"log/slog"
 )
 
+// waitCutoff is how long a finished download's output is given to be read
+// after the command has been reaped. A downloader's child, ffmpeg merging
+// formats say, can outlive it and hold the pipe open; without this the task
+// would wait for output that never comes.
+const waitCutoff = 5 * time.Second
+
 // status is where a download stands.
 type status int
 
@@ -416,32 +422,46 @@ func (m *manager) run(t *task, ctx context.Context, cancel context.CancelFunc) {
 	} else {
 		cmd.Env = os.Environ()
 	}
-	// The downloaders write their progress to both streams; one pipe
-	// carries both, so the lines stay in order.
-	out, err := cmd.StdoutPipe()
+	// The downloaders write their progress to both streams. The pipe is the
+	// app's own, not the command's: StdoutPipe hands its read end to Wait,
+	// which closes it as soon as the command exits and would cut the output
+	// short. Holding both ends here, the read runs to the end of the output
+	// and only then is the command reaped.
+	read, write, err := os.Pipe()
 	if err != nil {
 		m.failed(t, j, err)
 		return
 	}
-	cmd.Stderr = cmd.Stdout
+	defer read.Close()
+	cmd.Stdout, cmd.Stderr = write, write
 
 	if err := cmd.Start(); err != nil {
+		write.Close()
 		m.failed(t, j, fmt.Errorf("%s: %w", j.bin, err))
 		return
 	}
+	// The command holds the write end now; ours is closed so the read sees
+	// the end of the output when the command and its children are done.
+	write.Close()
 	// The command is reaped on a goroutine of its own, and the output is
 	// cut short when it ends: reading to the end of the pipe first would
 	// leave a task waiting on a child that outlived its downloader.
 	m.log().Info("download started", "url", t.url, "bin", j.bin, "args", j.args, "dir", j.dir)
 
-	waited := make(chan error, 1)
-	go func() {
-		err := cmd.Wait()
-		out.Close()
-		waited <- err
-	}()
-	m.scan(t, out)
-	if err = <-waited; err != nil {
+	// The output is read to its end before the command is reaped. A child
+	// that outlived its downloader can hold the write end open, so the read
+	// is given a bound: past it, the read end is closed under the reader and
+	// the output gathered so far is what the task keeps.
+	done := make(chan error, 1)
+	go func() { done <- cmd.Wait() }()
+	m.scan(t, read)
+	select {
+	case err = <-done:
+	case <-time.After(waitCutoff):
+		read.Close()
+		err = <-done
+	}
+	if err != nil {
 		m.failed(t, j, err)
 		return
 	}

@@ -24,9 +24,15 @@ tells it what to fetch.
   once, a cookies file for sites that ask you to sign in, a proxy, keeping the
   computer awake, and notifications. Each engine's executable can be pointed at
   a path of your own, or left to be found in `PATH`.
+- **Logs** — what the app did and what went wrong, newest last. Every download
+  is recorded with the command it ran and, when it failed, the downloader's own
+  last line of output; a crash is recorded with its stack. Filter by level, copy
+  it, or open the file.
 
 The engine is guessed from the link's host, as Media Downloader does, and the
 preset last used with an engine is remembered.
+
+Seven pages, in a sidebar: `Cmd+1` to `Cmd+7`, and the `Go` menu, go to them.
 
 ## Run it
 
@@ -34,10 +40,14 @@ preset last used with an engine is remembered.
 go tool mygo dev      # build and run, rebuilding as you edit
 go tool mygo build    # package it for this machine
 go test ./...         # the view and the download manager, without a window
+CGO_ENABLED=1 go test -race ./...   # the queue is concurrent: run this too
 ```
 
 `go tool mygo vet .` checks the stored build values and the goroutines the view
 captures.
+
+`go test -run TestRenderPages .` draws every page to a PNG with `ui.Render`, to
+look at the layout without a window; `VDLP_RENDER_DIR=/tmp` says where.
 
 ## Layout
 
@@ -45,12 +55,17 @@ captures.
 |---|---|
 | `main.go` | the window, the menus, and quitting |
 | `app.go` | the app's state, the view, and the pages' shared parts |
-| `pages.go` | the five pages |
+| `pages.go` | the seven pages |
 | `engines.go` | the downloaders, their presets, and the guess from a link |
 | `downloader.go` | the download queue, its progress, and the downloaders' output |
 | `info.go` | what an engine's `-J` says about a link |
 | `settings.go` | the settings, kept as JSON in the app's data directory |
+| `logs.go` | the log: a file on disk, and the tail the Logs page shows |
 | `icons.go` | the icons, drawn from SVG paths |
+
+`logs_test.go`, `manager_test.go`, `main_test.go`, `settings_test.go` and
+`zrender_test.go` hold the tests: the view driven through `ui.NewTester`, real
+downloads run against a shell script, and the pages drawn to PNGs.
 
 ## Before you use it
 

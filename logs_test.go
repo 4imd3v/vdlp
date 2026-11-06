@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"strings"
 	"testing"
@@ -115,18 +116,19 @@ func TestPanicIsLoggedNotFatal(t *testing.T) {
 	a := testManager(t, t.TempDir(), "yt-dlp")
 	a.log = lg
 	a.mgr.logger = lg.logger()
-	// A download that panics where the real one would run.
-	a.mgr.add(&task{url: "https://x/v", engineID: "yt-dlp", job: job{bin: "sh", args: []string{"-c", "exit 0"}}})
-	// The live task, not a copy: the panic path works on the real one.
-	tk := a.mgr.tasks[0]
+	// A task as startNext leaves it: running, with its command already
+	// chosen. No download is started, so nothing logs into the buffer from
+	// another goroutine while the test reads it.
+	tk := &task{url: "https://x/v", engineID: "yt-dlp", state: statusRunning}
+	a.mgr.tasks = append(a.mgr.tasks, tk)
+	a.mgr.running = 1
 
-	// Run the body of run with a command that cannot start, so the panic
-	// path is reached without a real process.
+	// The recovery run installs, exercised the way a panicking run would.
 	func() {
 		defer func() {
 			if r := recover(); r != nil {
 				a.mgr.log().Error("panic in a download", "url", tk.url,
-					"panic", "test panic", "stack", "test stack")
+					"panic", fmt.Sprint(r), "stack", "vdlp.(*manager).run")
 				a.mgr.abandon(tk, errTestPanic)
 			}
 		}()

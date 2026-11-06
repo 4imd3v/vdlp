@@ -11,6 +11,11 @@ import (
 	"github.com/egoist/mygo/ui"
 )
 
+// minPageTexts is the fewest texts a page may show. The sidebar, the heading
+// and the blurb account for nine; a page whose body never built stops there,
+// and the sparsest real page here shows twenty-one.
+const minPageTexts = 16
+
 // TestRenderPages draws every page to a PNG, to look at the layout without a
 // window: ui.Render runs the view once at a given size and scale. The files
 // go to the directory the test is given, or to /tmp when none is asked for.
@@ -65,12 +70,27 @@ func TestRenderPages(t *testing.T) {
 		a.infoFlat = p.id == "playlist"
 		a.chosen = map[string]bool{"137": true, "2": true}
 		img := ui.Render(a.view, 1100, 760, 1)
+		// A page whose body never built shows its heading, its blurb, the
+		// sidebar and nothing else. Counting the colours does not catch it
+		// (the sidebar alone draws hundreds), so count what the page says:
+		// this is how a page added to `pages` without a case in app.view
+		// looks, and it is otherwise silent.
+		if n := pageTexts(a, p.id); n < minPageTexts {
+			t.Errorf("page %s shows only %d texts: its body may not be built", p.id, n)
+		}
 		path := filepath.Join(dir, fmt.Sprintf("vdlp-%s.png", p.id))
 		if err := writePNG(path, img); err != nil {
 			t.Fatal(err)
 		}
-		t.Logf("wrote %s", path)
+		t.Logf("wrote %s (%d texts)", path, pageTexts(a, p.id))
 	}
+}
+
+// pageTexts returns how many texts a page shows, sidebar and all.
+func pageTexts(a *app, id string) int {
+	tt := ui.NewTester(a.view, 1100, 760)
+	tt.Frame()
+	return len(tt.Texts())
 }
 
 // writePNG encodes an image as a PNG file.

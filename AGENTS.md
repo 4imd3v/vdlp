@@ -45,7 +45,7 @@ than by hand, so it stays in step with the pinned version.
 |---|---|
 | `main.go` | the window, the app menus, and quitting |
 | `app.go` | the app's state, the view, the sidebar, and the parts the pages share |
-| `pages.go` | the five pages |
+| `pages.go` | the seven pages |
 | `engines.go` | the downloaders, their presets, and the guess from a link's host |
 | `downloader.go` | the download queue, the task, and folding a downloader's output |
 | `info.go` | what an engine's `-J` says about a link |
@@ -54,8 +54,14 @@ than by hand, so it stays in step with the pinned version.
 | `icons.go` | the icons, drawn from SVG paths |
 
 `app` is the state the window shows. `pages` (in `app.go`) is the sidebar's
-destinations, in order: Cmd+1…Cmd+5 go to them, and the `Go` menu mirrors it.
-Adding a page means adding an entry there and a case in `app.view`.
+destinations, in order: Cmd+1…Cmd+7 go to them, and the `Go` menu mirrors it.
+Adding a page takes **two** edits, and forgetting the second leaves a page that
+renders its heading and nothing else — which is what happened to `logs` once:
+an entry in `pages` and an icon in `pageIcon`, *and* a `case` in `app.view`.
+`TestRenderPages` walks `pages` and fails on a page showing fewer than
+`minPageTexts` texts, which is what a missing `case` looks like. It only
+asserts this because it used to write the PNG and check nothing, so a blank
+page passed silently; if you change the test, keep an assertion in it.
 
 ## Invariants that are easy to break
 
@@ -88,10 +94,18 @@ stopped, and `startNext` only starts `statusQueued`. `pause` sets
 file, because every engine that can resume gets `resumeFlag` (`-c`) — that is
 how a stopped download picks up where it left off on every platform.
 
-**A killed downloader cannot stall the queue.** A downloader's child (ffmpeg
-merging formats, say) can outlive it and hold the output pipe open, so reading
-the pipe to EOF before `Wait` blocks forever. `run` reaps the command on a
-goroutine of its own that closes the pipe, and `cmd.WaitDelay` bounds the wait.
+**A download's output is read to its end, and `Wait` must not close the pipe
+under the reader.** `cmd.StdoutPipe` hands its read end to `Wait`, which closes
+it the moment the command exits — cutting the last lines off and losing the
+file the downloader said it wrote (the merge line, which names the real file,
+comes after the one naming the stream). `run` therefore makes its own
+`os.Pipe`, gives the write end to the command, closes its own copy, reads to
+the end, and only then reaps.
+
+**A killed downloader cannot stall the queue.** The same read is bounded by
+`waitCutoff`: a downloader's child (ffmpeg merging formats, say) can outlive it
+and hold the write end open, so past the bound the read end is closed under the
+reader and the task keeps what it has. `cmd.WaitDelay` covers the reap.
 
 **`ui.Progress` takes 0…1; `task.percent` is 0…100**, or `-1` while the length
 is unknown (which the progress bar reads as "of unknown length"). The view
@@ -175,8 +189,10 @@ Tests drive the view through `ui.NewTester`, which clicks and types as a user
 would — no window, no display, no sleeping (advance the tester's clock
 instead). `manager_test.go` runs real downloads against a shell script written
 to a temp dir, so a change to the queue is checked against a downloader that
-actually prints progress and exits. `zrender_test.go` draws every page to a
-PNG with `ui.Render`, to look at the layout without a window:
+actually prints progress and exits. `logs_test.go` checks the handler writes
+both ways and that a panic is logged rather than fatal. `zrender_test.go` draws
+every page to a PNG with `ui.Render`, to look at the layout without a window,
+and fails on a page whose body never built:
 `VDLP_RENDER_DIR=/tmp go test -run TestRenderPages .`
 
 A change that is not covered by a test needs a reason. New non-trivial logic —
@@ -193,3 +209,7 @@ a branch, a parser, money, a new script — leaves one small test behind.
   own proxy settings.
 - **Real-hardware verification.** Nothing has been clicked through on Windows
   or macOS. Assume a UI change needs looking at on the platform it is for.
+- **The log's own failures.** If the log file cannot be opened the app logs to
+  nowhere and carries on, so a machine with an unwritable logs directory loses
+  the trace silently. The Logs page would show only what the current run has
+  in memory, and say nothing about what it could not write.

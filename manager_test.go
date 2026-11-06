@@ -88,6 +88,52 @@ exit 0
 	}
 }
 
+// TestManagerKeepsTheWholeOutput checks that a download's output is read to
+// its end. A pipe handed to StdoutPipe is closed by Wait as soon as the
+// command exits, which cuts the last lines off and loses the file the
+// downloader said it wrote.
+func TestManagerKeepsTheWholeOutput(t *testing.T) {
+	dir := t.TempDir()
+	// Many lines, so that a read cut short is plain to see.
+	bin := fakeEngine(t, "fake-chatty", `
+echo '[download] Destination: A Video.f137.mp4'
+for i in 1 2 3 4 5 6 7 8 9 10; do
+  echo "[download]  $((i*10))% of  48.00MiB at  1.00MiB/s ETA 00:01"
+done
+echo '[Merger] Merging formats into "A Video.mp4"'
+echo '[download] 100% of 48.00MiB in 00:12'
+echo done > "A Video.mp4"
+exit 0
+`)
+	a := testManager(t, dir, "yt-dlp")
+	a.set.Binaries["yt-dlp"] = bin
+	a.queue("https://example.com/watch?v=x", "Best", nil)
+
+	deadline := time.Now().Add(20 * time.Second)
+	for time.Now().Before(deadline) {
+		if tsk := a.mgr.snapshot()[0]; tsk.state == statusDone {
+			break
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	tsk := a.mgr.snapshot()[0]
+	if tsk.state != statusDone {
+		t.Fatalf("state %v, err %q", tsk.state, tsk.err)
+	}
+	// One destination line, ten progress lines, the merge and the summary.
+	if len(tsk.log) < 13 {
+		t.Errorf("only %d of the downloader's 13 lines were read: %q", len(tsk.log), tsk.log)
+	}
+	if last := tsk.log[len(tsk.log)-1]; !strings.Contains(last, "100%") {
+		t.Errorf("the last line read is %q, not the completion", last)
+	}
+	// The merged name is on a line after the one that named the stream, so
+	// it is the first thing a short read loses.
+	if tsk.file != "A Video.mp4" || tsk.title != "A Video" {
+		t.Errorf("file %q title %q", tsk.file, tsk.title)
+	}
+}
+
 // TestManagerRunsAtMostMax checks that the concurrency limit holds and that
 // the queue drains.
 func TestManagerRunsAtMostMax(t *testing.T) {
