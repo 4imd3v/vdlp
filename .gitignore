@@ -2,3 +2,7 @@
 /.mygo/
 mygo_windows_*.syso
 .pi/
+
+# The app binary, from a plain `go build ./...`.
+/vdlp
+/vdlp.exe
