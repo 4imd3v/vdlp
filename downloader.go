@@ -108,9 +108,12 @@ var (
 	reSpeed   = regexp.MustCompile(`([\d.]+)\s*([KMGT]?i?B/s)`)
 	reETA     = regexp.MustCompile(`ETA[:\s]+([0-9hms:]+)`)
 	reTotal   = regexp.MustCompile(`of\s+~?\s*([\d.]+\s*[KMGT]?i?B)`)
-	reDest    = regexp.MustCompile(`(?i)(?:Destination|Merging formats into)\s*:?\s*"?(.+?)"?\s*$`)
-	reSave    = regexp.MustCompile(`Saving to: [‘'](.+)[’']`)
-	reSaved   = regexp.MustCompile(`saved \[(\d+)\]`)
+	// wget prints the length of what it is about to fetch once, before it
+	// starts, and never again.
+	reLength = regexp.MustCompile(`^Length:\s*(\d+)\s*\(([^)]+)\)`)
+	reDest   = regexp.MustCompile(`(?i)(?:Destination|Merging formats into)\s*:?\s*"?(.+?)"?\s*$`)
+	reSave   = regexp.MustCompile(`Saving to: [‘'](.+)[’']`)
+	reSaved  = regexp.MustCompile(`saved \[(\d+)\]`)
 )
 
 // manager runs the downloads, a few at a time, and keeps their state for
@@ -448,6 +451,9 @@ func (m *manager) fold(t *task, line string) {
 	}
 	if g := reTotal.FindStringSubmatch(line); g != nil {
 		t.size = strings.TrimSpace(g[1])
+	}
+	if g := reLength.FindStringSubmatch(line); g != nil {
+		t.size = g[2] + " (" + g[1] + " B)"
 	}
 	if reSaved.MatchString(line) {
 		t.percent = 100

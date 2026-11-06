@@ -218,6 +218,74 @@ func TestProgress(t *testing.T) {
 	}
 }
 
+// TestWgetProgress folds what wget really prints. Its progress bar carries
+// no total and its speed only appears in the summary line, so the size has
+// to come from the Length line it prints once before it starts.
+func TestWgetProgress(t *testing.T) {
+	m := &manager{}
+	tk := &task{percent: -1}
+	for _, line := range []string{
+		"--2026-11-06 22:15:45--  https://example.com/f.bin",
+		"Resolving example.com... 1.2.3.4",
+		"Connecting to example.com|1.2.3.4|:443... connected.",
+		"HTTP request sent, awaiting response... 200 OK",
+		"Length: 179127 (175K) [text/plain]",
+		"Saving to: \u2018report.pdf\u2019",
+		"     0K .......... .......... .......... .......... .......... 28%  656K 0s",
+		"   150K .......... .......... ....                            100% 1.22M=0.2s",
+		"2026-11-06 22:15:45 (1.05 MB/s) - \u2018report.pdf\u2019 saved [179127/179127]",
+	} {
+		m.fold(tk, line)
+	}
+	if tk.percent != 100 {
+		t.Errorf("percent %v", tk.percent)
+	}
+	if tk.file != "report.pdf" || tk.title != "report" {
+		t.Errorf("file %q title %q", tk.file, tk.title)
+	}
+	if tk.size != "175K (179127 B)" {
+		t.Errorf("size %q", tk.size)
+	}
+	if tk.speed != "1.05 MB/s" {
+		t.Errorf("speed %q", tk.speed)
+	}
+}
+
+// TestYtDlpProgress folds what yt-dlp really prints for a merged download,
+// so the parser is checked against the tool and not against itself.
+func TestYtDlpProgress(t *testing.T) {
+	m := &manager{}
+	tk := &task{percent: -1}
+	for _, line := range []string{
+		"[youtube] dQw4w9WgXcQ: Downloading webpage",
+		"[info] dQw4w9WgXcQ: Downloading 1 format(s): 140",
+		"[download] Destination: A Video [dQw4w9WgXcQ].m4a",
+		"[download]   0.0% of    3.29MiB at  Unknown B/s ETA Unknown",
+		"[download]  60.8% of    3.29MiB at   4.38MiB/s ETA 00:00",
+		"[download] 100% of    3.29MiB in 00:00:01 at 2.42MiB/s",
+		"[FixupM4a] Correcting container of \"A Video [dQw4w9WgXcQ].m4a\"",
+	} {
+		m.fold(tk, line)
+	}
+	if tk.percent != 100 {
+		t.Errorf("percent %v", tk.percent)
+	}
+	if tk.file != "A Video [dQw4w9WgXcQ].m4a" {
+		t.Errorf("file %q", tk.file)
+	}
+	if tk.title != "A Video [dQw4w9WgXcQ]" {
+		t.Errorf("title %q", tk.title)
+	}
+	if tk.size != "3.29MiB" {
+		t.Errorf("size %q", tk.size)
+	}
+	// The unknown speed and ETA of the first line must not be kept as the
+	// download's own.
+	if tk.speed == "Unknown B/s" || tk.eta == "Unknown" {
+		t.Errorf("speed %q eta %q", tk.speed, tk.eta)
+	}
+}
+
 // TestParseInfo reads what an engine prints for -J.
 func TestParseInfo(t *testing.T) {
 	info, err := parseInfo([]byte(`{
@@ -225,7 +293,7 @@ func TestParseInfo(t *testing.T) {
 		"formats": [
 			{"format_id":"137","ext":"mp4","width":1920,"height":1080,"filesize":12345678,"vcodec":"avc1","acodec":"none","format_note":"1080p"},
 			{"format_id":"140","ext":"m4a","filesize_approx":1000,"vcodec":"none","acodec":"mp4a"}
-		]}`), false)
+		]}`), false, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -238,21 +306,39 @@ func TestParseInfo(t *testing.T) {
 	if f := info.formats[1]; f.video || !f.audio || f.size != 1000 {
 		t.Errorf("second format %+v", f)
 	}
+	// A storyboard has neither codec: it is not a stream, and choosing one
+	// would download nothing playable.
+	storyboard, err := parseInfo([]byte(`{"title":"t","formats":[
+		{"format_id":"sb0","ext":"mhtml","vcodec":"none","acodec":"none","format_note":"storyboard"},
+		{"format_id":"sb3","ext":"mhtml","width":48,"height":27,"vcodec":"none","acodec":"none"},
+		{"format_id":"18","ext":"mp4","vcodec":"avc1","acodec":"mp4a"}]}`), false, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(storyboard.formats) != 1 || storyboard.formats[0].id != "18" {
+		t.Errorf("storyboards were not filtered out: %+v", storyboard.formats)
+	}
 	if got := formatNote(info.formats[0]); !strings.Contains(got, "video only") {
 		t.Errorf("note %q", got)
 	}
 
 	entries, err := parseInfo([]byte(`{"title":"A list","entries":[
 		{"id":"1","title":"One","url":"https://x/1","duration":61},
-		{"id":"2","title":"Two","webpage_url":"https://x/2"}]}`), true)
+		{"id":"2","title":"Two","webpage_url":"https://x/2"},
+		{"id":"3","title":"Three","url":"/watch?v=rel"}]}`), true, "https://www.youtube.com/playlist?list=PL1")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(entries.entries) != 2 {
+	if len(entries.entries) != 3 {
 		t.Fatalf("entries %+v", entries.entries)
 	}
 	if entries.entries[1].url != "https://x/2" {
 		t.Errorf("entry url %q", entries.entries[1].url)
+	}
+	// A flat playlist gives an entry a link relative to the site, which a
+	// downloader cannot fetch on its own.
+	if got := entries.entries[2].url; got != "https://www.youtube.com/watch?v=rel" {
+		t.Errorf("relative entry url %q", got)
 	}
 	if duration(61) != "1:01" || duration(3661) != "1:01:01" {
 		t.Errorf("durations %q %q", duration(61), duration(3661))

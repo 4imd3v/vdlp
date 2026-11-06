@@ -842,7 +842,7 @@ func fetchInfo(e engine, override, url string, flat bool) (*mediaInfo, error) {
 	if err != nil {
 		return nil, infoError(e, err)
 	}
-	return parseInfo(out, flat)
+	return parseInfo(out, flat, url)
 }
 
 // infoError says why an engine's info command failed, with the last thing
