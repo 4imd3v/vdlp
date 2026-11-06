@@ -32,7 +32,7 @@ tells it what to fetch.
 The engine is guessed from the link's host, as Media Downloader does, and the
 preset last used with an engine is remembered.
 
-Seven pages, in a sidebar: `Cmd+1` to `Cmd+7`, and the `Go` menu, go to them.
+Eight pages in a sidebar: `Cmd+1` to `Cmd+8`, and the `Go` menu, go to them.
 
 ## Run it
 
@@ -55,17 +55,19 @@ look at the layout without a window; `VDLP_RENDER_DIR=/tmp` says where.
 |---|---|
 | `main.go` | the window, the menus, and quitting |
 | `app.go` | the app's state, the view, and the pages' shared parts |
-| `pages.go` | the seven pages |
+| `pages.go` | the eight pages |
 | `engines.go` | the downloaders, their presets, and the guess from a link |
 | `downloader.go` | the download queue, its progress, and the downloaders' output |
 | `info.go` | what an engine's `-J` says about a link |
 | `settings.go` | the settings, kept as JSON in the app's data directory |
 | `logs.go` | the log: a file on disk, and the tail the Logs page shows |
 | `icons.go` | the icons, drawn from SVG paths |
+| `subs.go` | the subtitles: read, rewritten into blocks, and muxed in |
 
-`logs_test.go`, `manager_test.go`, `main_test.go`, `settings_test.go` and
-`zrender_test.go` hold the tests: the view driven through `ui.NewTester`, real
-downloads run against a shell script, and the pages drawn to PNGs.
+`logs_test.go`, `manager_test.go`, `main_test.go`, `settings_test.go`,
+`subs_test.go` and `zrender_test.go` hold the tests: the view driven through
+`ui.NewTester`, real downloads run against a shell script, and the pages drawn
+to PNGs.
 
 ## Releasing and updates
 
@@ -74,8 +76,8 @@ section is the release notes the app shows — commit, and push the tag of that
 version:
 
 ```sh
-git tag v0.2.0
-git push origin v0.2.0
+git tag v0.2.1
+git push origin v0.2.1
 ```
 
 `.github/workflows/release.yml` runs the tests, builds Windows, Linux and macOS

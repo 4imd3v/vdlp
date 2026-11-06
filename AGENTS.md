@@ -63,16 +63,17 @@ commit step unless they explicitly asked you to commit.
 |---|---|
 | `main.go` | the window, the app menus, the updater plugin, and quitting |
 | `app.go` | the app's state, the view, the sidebar, and the parts the pages share |
-| `pages.go` | the seven pages |
+| `pages.go` | the eight pages |
 | `engines.go` | the downloaders, their presets, and the guess from a link's host |
 | `downloader.go` | the download queue, the task, and folding a downloader's output |
 | `info.go` | what an engine's `-J` says about a link |
 | `settings.go` | the settings, kept as JSON in the app's data directory |
 | `logs.go` | the log: a file on disk, and the tail the Logs page shows |
 | `icons.go` | the icons, drawn from SVG paths |
+| `subs.go` | the subtitles: read, rewritten into blocks, and muxed in |
 
 `app` is the state the window shows. `pages` (in `app.go`) is the sidebar's
-destinations, in order: Cmd+1…Cmd+7 go to them, and the `Go` menu mirrors it.
+destinations, in order: Cmd+1…Cmd+8 go to them, and the `Go` menu mirrors it.
 Adding a page takes **two** edits, and forgetting the second leaves a page that
 renders its heading and nothing else — which is what happened to `logs` once:
 an entry in `pages` and an icon in `pageIcon`, *and* a `case` in `app.view`.
