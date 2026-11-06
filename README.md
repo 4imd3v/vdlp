@@ -67,6 +67,25 @@ look at the layout without a window; `VDLP_RENDER_DIR=/tmp` says where.
 `zrender_test.go` hold the tests: the view driven through `ui.NewTester`, real
 downloads run against a shell script, and the pages drawn to PNGs.
 
+## Releasing
+
+Bump `version` in `mygo.json`, commit, and push the tag of that version:
+
+```sh
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+`.github/workflows/release.yml` runs the tests, builds Windows, Linux and macOS
+on a runner of each, and uploads the disk image, the installers, the `.deb` and
+the `.tar.gz` to a draft release, which you review and publish. The tag must be
+the version in `mygo.json` — the workflow checks it before it builds anything.
+
+Nothing is signed with a key of yours yet: the macOS app is signed ad hoc, so
+Gatekeeper asks the user to right-click and Open it the first time, and Windows
+warns SmartScreen. Signing needs a Developer ID certificate and notarization,
+and a Windows certificate, as MyGo's distribution docs describe.
+
 ## Before you use it
 
 Download only what the law where you are lets you download, and what the site's
