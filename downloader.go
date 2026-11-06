@@ -65,6 +65,9 @@ type job struct {
 	dir        string
 	proxy      string
 	resumeFlag string
+	// embedSubs asks for the subtitles the engine writes to be rewritten
+	// and muxed into the video once it has downloaded it.
+	embedSubs bool
 }
 
 // task is one download: a link, the engine that fetches it and how it goes.
@@ -465,7 +468,62 @@ func (m *manager) run(t *task, ctx context.Context, cancel context.CancelFunc) {
 		m.failed(t, j, err)
 		return
 	}
+	if j.embedSubs {
+		if err := m.embedSubtitles(ctx, t); err != nil {
+			m.failed(t, j, err)
+			return
+		}
+	}
 	m.finish(t, nil)
+}
+
+// embedSubtitles rewrites the subtitles the engine wrote into blocks of the
+// two lines a player draws, and muxes them into the video with ffmpeg, which
+// the download needed anyway.
+func (m *manager) embedSubtitles(ctx context.Context, t *task) error {
+	m.mu.Lock()
+	video := t.path()
+	m.mu.Unlock()
+	switch strings.ToLower(filepath.Ext(video)) {
+	case ".srt", ".vtt", ".ass", ".ssa", ".ttml", "":
+		// A downloader names its subtitles before the video, so the last
+		// file it named may be one: they are left beside the video, where
+		// a player finds them, rather than failed for nothing.
+		m.log().Warn("no video to embed the subtitles in", "url", t.url, "file", video)
+		return nil
+	}
+	subs := subtitleFiles(video)
+	if len(subs) == 0 {
+		m.log().Warn("no subtitles to embed", "url", t.url, "video", video)
+		return nil
+	}
+	for _, s := range subs {
+		if !strings.EqualFold(filepath.Ext(s), ".srt") {
+			continue
+		}
+		b, err := os.ReadFile(s)
+		if err != nil {
+			return err
+		}
+		if err := os.WriteFile(s, []byte(cleanSRT(string(b))), 0o644); err != nil {
+			return err
+		}
+	}
+	out, err := embedSubtitles(ctx, video, subs)
+	if err != nil {
+		return err
+	}
+	for _, s := range subs {
+		os.Remove(s)
+	}
+	m.mu.Lock()
+	if out != video {
+		// The container had to change for the subtitles to fit.
+		t.file = out
+	}
+	m.mu.Unlock()
+	m.log().Info("subtitles embedded", "url", t.url, "file", out, "tracks", len(subs))
+	return nil
 }
 
 // failed logs why a download could not run, and reports it to the task. The

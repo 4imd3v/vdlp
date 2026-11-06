@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"slices"
 	"strings"
 
 	"github.com/egoist/mygo"
@@ -159,6 +160,17 @@ func newApp(set settings) *app {
 func (a *app) command(url, engineID, preset string, presetArgs []string) job {
 	e := engineByID(engineID)
 	args := append([]string{}, presetArgs...)
+	// An audio-only download has nothing to embed the subtitles in, and one
+	// that skips the video has no file to put them in.
+	subs := e.subsArgs != nil && !slices.Contains(args, "-x")
+	embed := subs && a.set.EmbedSubs && !slices.Contains(args, "--skip-download")
+	if embed {
+		args = append(args, e.subsArgs...)
+	}
+	// The languages reach the Subtitles only preset too, overriding its "all".
+	if subs && a.set.SubLangs != "" {
+		args = append(args, "--sub-langs", a.set.SubLangs)
+	}
 	if e.outFlag != "" && a.set.Template != "" {
 		args = append(args, e.outFlag, a.set.Template)
 	}
@@ -177,6 +189,7 @@ func (a *app) command(url, engineID, preset string, presetArgs []string) job {
 		dir:        a.set.DownloadDir,
 		proxy:      a.set.Proxy,
 		resumeFlag: e.resumeFlag,
+		embedSubs:  embed,
 	}
 }
 

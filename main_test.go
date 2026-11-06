@@ -86,6 +86,21 @@ func TestQueueCarriesOptions(t *testing.T) {
 	}
 }
 
+// TestDownloadPageEmbedsSubtitles checks that the subtitle controls on the
+// download page reach the settings.
+func TestDownloadPageEmbedsSubtitles(t *testing.T) {
+	a, tt := testApp(t)
+	a.page, a.url = "download", "https://www.youtube.com/watch?v=x"
+	tt.Frame()
+	if err := tt.Click("Embed the subtitles in the video"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if !a.set.EmbedSubs {
+		t.Error("the switch on the download page did not reach the settings")
+	}
+}
+
 // TestEngineFromLink checks the guess the app makes from a link's host.
 func TestEngineFromLink(t *testing.T) {
 	for url, want := range map[string]string{
@@ -144,9 +159,36 @@ func TestCommand(t *testing.T) {
 	if j := a.command("https://x", "yt-dlp", "Best", nil); j.resumeFlag != "-c" {
 		t.Errorf("yt-dlp does not continue a partial file: %q", j.resumeFlag)
 	}
+	// Subtitles are written beside the video by an engine that can, and
+	// muxed in by the app, so only when the setting asks for them.
+	a.extra, a.set.EmbedSubs, a.set.SubLangs = "", true, "en,ja"
+	j = a.command("https://x", "yt-dlp", "Best", nil)
+	if !j.embedSubs {
+		t.Error("yt-dlp is asked for the subtitles but the job does not embed them")
+	}
+	joined = strings.Join(j.args, " ")
+	// The native srt of the engine, or the words repeat.
+	for _, want := range []string{"--write-subs", "--sub-langs en,ja", "--sub-format srt/vtt/best"} {
+		if !strings.Contains(joined, want) {
+			t.Errorf("command %q is missing %q", joined, want)
+		}
+	}
+	// An audio download asks for no subtitles it cannot embed.
+	for _, want := range []string{"--write-subs", "--sub-langs"} {
+		if j := a.command("https://x", "yt-dlp", "Audio: MP3", []string{"-x", "--audio-format", "mp3"}); contains(j.args, want) || j.embedSubs {
+			t.Errorf("audio command %v has %q", j.args, want)
+		}
+	}
+	// Nor does one that downloads no video.
+	if j := a.command("https://x", "yt-dlp", "Subtitles only", []string{"--skip-download", "--write-subs"}); j.embedSubs {
+		t.Errorf("subtitles-only command %v embeds what it did not download", j.args)
+	}
 	// wget takes its own flags for the same settings.
 	if j := a.command("https://x", "wget", "Download", nil); contains(j.args, "-o") || j.resumeFlag != "-c" {
 		t.Errorf("wget command %v", j.args)
+	}
+	if j := a.command("https://x", "wget", "Download", nil); contains(j.args, "--write-subs") {
+		t.Errorf("wget command %v got a subtitle flag it does not take", j.args)
 	}
 }
 

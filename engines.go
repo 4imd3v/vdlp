@@ -25,6 +25,12 @@ type engine struct {
 	lineFlag string
 	// resumeFlag continues a partial file, "" when the engine cannot.
 	resumeFlag string
+	// subsArgs download the subtitles beside the video, nil when the
+	// engine has no way to. The app muxes them in itself (see
+	// embedSubtitles), so it can rewrite them first: YouTube's vtt of its
+	// automatic captions repeats the line before each one, so the engine
+	// is asked for its native srt, one line per cue.
+	subsArgs []string
 	// formats reports whether the engine can list formats and playlist
 	// entries, as yt-dlp does with -J.
 	formats bool
@@ -51,7 +57,7 @@ func ytdlpPresets() []preset {
 		video(2160), video(1440), video(1080), video(720), video(480), video(360),
 		{"Audio only (best)", []string{"-f", "ba/bestaudio"}},
 		audio("mp3"), audio("m4a"), audio("opus"), audio("vorbis"), audio("flac"),
-		{"Subtitles only", []string{"--skip-download", "--write-subs", "--write-auto-subs", "--sub-langs", "all", "--convert-subs", "srt"}},
+		{"Subtitles only", []string{"--skip-download", "--write-subs", "--write-auto-subs", "--sub-format", "srt/vtt/best", "--sub-langs", "all", "--convert-subs", "srt"}},
 		{"Thumbnail only", []string{"--skip-download", "--write-thumbnail", "--convert-thumbnails", "png"}},
 		{"Metadata only", []string{"--skip-download", "--write-info-json"}},
 	}
@@ -67,8 +73,10 @@ var engines = []engine{
 		cookiesFlag: "--cookies",
 		lineFlag:    "--newline",
 		resumeFlag:  "-c",
-		formats:     true,
-		presets:     ytdlpPresets(),
+		subsArgs: []string{"--write-subs", "--write-auto-subs",
+			"--sub-format", "srt/vtt/best"},
+		formats: true,
+		presets: ytdlpPresets(),
 	},
 	{
 		id: "youtube-dl", name: "youtube-dl", bin: "youtube-dl",
@@ -77,8 +85,10 @@ var engines = []engine{
 		cookiesFlag: "--cookies",
 		lineFlag:    "--newline",
 		resumeFlag:  "-c",
-		formats:     true,
-		presets:     ytdlpPresets(),
+		subsArgs: []string{"--write-sub", "--write-auto-sub",
+			"--sub-format", "srt/vtt/best"},
+		formats: true,
+		presets: ytdlpPresets(),
 	},
 	{
 		id: "gallery-dl", name: "gallery-dl", bin: "gallery-dl",

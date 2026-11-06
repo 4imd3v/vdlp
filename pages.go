@@ -57,6 +57,22 @@ func (a *app) downloadPage(c *ui.Context) {
 			}
 			ui.TextInput(c, &a.extra).Placeholder("Extra options, e.g. --embed-subs --embed-thumbnail").Grow(1)
 			muted(c, "Extra options are split as a shell splits them, and added to the command line.")
+			// Subtitles: local copies of the settings, written back once
+			// the inputs have applied the change, as a preset is.
+			if e := engineByID(a.engine); e.subsArgs != nil {
+				embed, langs := a.set.EmbedSubs, a.set.SubLangs
+				ui.Row(c).Gap(12).AlignItems(ui.Center).Children(func() {
+					ui.Checkbox(c, &embed, "Embed the subtitles in the video").Shrink(0)
+					ui.TextInput(c, &langs).Placeholder("Languages, e.g. en,ja — empty for the engine's choice").Grow(1).OnChange(func() {
+						a.set.SubLangs = langs
+						a.save()
+					})
+				})
+				if embed != a.set.EmbedSubs {
+					a.set.EmbedSubs = embed
+					a.save()
+				}
+			}
 			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 				ui.Button(c, "Get formats").Disabled(a.url == "" || a.fetching).OnClick(a.fetchFormats)
 				if a.fetching {

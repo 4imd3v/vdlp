@@ -24,6 +24,11 @@ type settings struct {
 	Template string `json:"template"`
 	// MaxActive is how many downloads run at once.
 	MaxActive int `json:"maxActive"`
+	// EmbedSubs downloads the subtitles and embeds them in the video.
+	EmbedSubs bool `json:"embedSubs"`
+	// SubLangs is the languages of those subtitles, as the engine spells
+	// them; "" asks for the engine's own choice.
+	SubLangs string `json:"subLangs"`
 	// Cookies is a cookies file passed to engines that take one.
 	Cookies string `json:"cookies"`
 	// Proxy is a proxy URL given to the downloaders' environment.
